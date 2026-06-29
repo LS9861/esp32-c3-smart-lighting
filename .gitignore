@@ -9,6 +9,9 @@ api_key_config.m
 *secret*
 *api_key*
 
+!secrets.example.h
+!src/secrets.example.h
+
 # MATLAB files to ignore
 *.asv
 *.mlapp

@@ -1,13 +1,6 @@
 #include <Arduino.h>
 #include "config.h"
-
-// We'll add these later
-// #include "secrets.h"
-// #include "display_manager.h"
-// #include "sensor_manager.h"
-// #include "ai_decision.h"
-// #include "wifi_manager.h"
-// #include "relay_manager.h"
+#include "sensor_manager.h"
 
 // ============================================
 // GLOBAL VARIABLES
@@ -27,18 +20,21 @@ void printStatus();
 // ============================================
 
 void setup() {
-    // Initialize serial for debugging
+    // Initialize serial
     Serial.begin(115200);
     delay(1000);
     
     Serial.println("========================================");
     Serial.println("  ESP32-C3 Smart Lighting System");
-    Serial.println("  Version: 0.1.0 (Foundation)");
+    Serial.println("  Version: 0.2.0 (Sensor Manager)");
     Serial.println("========================================");
     Serial.println();
     
     // Initialize hardware
     initHardware();
+    
+    // Initialize sensor manager
+    sensorManager.begin();
     
     Serial.println("✅ Setup complete!");
     Serial.println("📡 Waiting for loop...");
@@ -50,14 +46,17 @@ void setup() {
 // ============================================
 
 void loop() {
+    // Update sensors
+    sensorManager.updateLDR();
+    
     // Print status every 5 seconds
     if (millis() - lastSerialPrint > 5000) {
         lastSerialPrint = millis();
         printStatus();
     }
     
-    // Small delay to prevent watchdog issues
-    delay(10);
+    // Small delay
+    delay(100);
 }
 
 // ============================================
@@ -70,28 +69,19 @@ void initHardware() {
     // Configure pins
     pinMode(RELAY_PIN, OUTPUT);
     pinMode(SWITCH_PIN, INPUT_PULLUP);
+    pinMode(LDR_PIN, INPUT);
     
     // Set initial states
-    digitalWrite(RELAY_PIN, LOW);  // Relay OFF by default
+    digitalWrite(RELAY_PIN, LOW);
     
     // Print pin configuration
     Serial.println("   Pin configuration:");
     Serial.printf("   - LDR:      GPIO%d (ADC)\n", LDR_PIN);
-    Serial.printf("   - DS18B20:  GPIO%d (OneWire)\n", DS18B20_PIN);
+    Serial.printf("   - DS18B20:  GPIO%d (OneWire) [Coming soon]\n", DS18B20_PIN);
     Serial.printf("   - Relay:    GPIO%d (Output)\n", RELAY_PIN);
     Serial.printf("   - Switch:   GPIO%d (Input Pull-up)\n", SWITCH_PIN);
-    Serial.printf("   - OLED SDA: GPIO%d (I2C)\n", OLED_SDA);
-    Serial.printf("   - OLED SCL: GPIO%d (I2C)\n", OLED_SCL);
-    Serial.println();
-    
-    // Read initial sensor values
-    int ldrValue = analogRead(LDR_PIN);
-    int switchState = digitalRead(SWITCH_PIN);
-    
-    Serial.println("📊 Initial readings:");
-    Serial.printf("   - LDR value:    %d\n", ldrValue);
-    Serial.printf("   - Switch:       %s\n", switchState ? "RELEASED" : "PRESSED");
-    Serial.printf("   - Relay:        %s\n", digitalRead(RELAY_PIN) ? "ON" : "OFF");
+    Serial.printf("   - OLED SDA: GPIO%d (I2C) [Coming soon]\n", OLED_SDA);
+    Serial.printf("   - OLED SCL: GPIO%d (I2C) [Coming soon]\n", OLED_SCL);
     Serial.println();
 }
 
@@ -104,20 +94,13 @@ void printStatus() {
     Serial.println("📊 SYSTEM STATUS");
     Serial.println("----------------------------------------");
     
-    // Read current values
-    int ldrValue = analogRead(LDR_PIN);
+    // Get LDR reading
+    int ldrValue = sensorManager.getLastLDR();
+    String ldrStatus = sensorManager.getLastLDRStatus();
+    
+    // Read switch state
     int switchState = digitalRead(SWITCH_PIN);
     int relayState = digitalRead(RELAY_PIN);
-    
-    // Determine LDR status
-    String ldrStatus;
-    if (ldrValue < LIGHT_ON_THRESHOLD) {
-        ldrStatus = "DRK (Dark)";
-    } else if (ldrValue > LIGHT_OFF_THRESHOLD) {
-        ldrStatus = "BRT (Bright)";
-    } else {
-        ldrStatus = "NRM (Normal)";
-    }
     
     // Print status
     Serial.printf("   ⏰ Uptime:   %lu seconds\n", millis() / 1000);
@@ -125,12 +108,24 @@ void printStatus() {
     Serial.printf("   🔦 Relay:    %s\n", relayState ? "ON" : "OFF");
     Serial.printf("   🔘 Switch:   %s\n", switchState ? "RELEASED" : "PRESSED");
     
-    // Decision hierarchy info
+    // Sensor status
+    Serial.println("   📋 Sensors:");
+    Serial.printf("      - LDR threshold: ON=%d, OFF=%d\n", LIGHT_ON_THRESHOLD, LIGHT_OFF_THRESHOLD);
+    Serial.printf("      - Hysteresis: %d\n", LDR_HYSTERESIS);
+    
+    // Decision info
     Serial.println("   📋 Decision: [MANUAL → AI → LDR]");
     if (switchState == LOW) {
         Serial.println("   🟡 MANUAL OVERRIDE ACTIVE!");
     } else {
-        Serial.println("   ⚪ Waiting for AI decision (coming soon)");
+        // Show what AI would decide based on LDR
+        if (ldrValue < LIGHT_ON_THRESHOLD) {
+            Serial.println("   💡 AI would turn ON (Dark)");
+        } else if (ldrValue > LIGHT_OFF_THRESHOLD) {
+            Serial.println("   ☀️ AI would turn OFF (Bright)");
+        } else {
+            Serial.println("   ⚪ AI would maintain state (Normal)");
+        }
     }
     Serial.println("----------------------------------------");
     Serial.println();
